@@ -5,7 +5,8 @@ const bodyParser = require('body-parser');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
 // const encrypt = require('mongoose-encryption');
-const md5 = require('md5');
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 
 mongoose.connect('mongodb://localhost:27017/userDB', {useNewUrlParser: true, useUnifiedTopology: true});
 
@@ -38,33 +39,40 @@ app.get('/register', (req, res) => {
 });
 
 app.post('/register', (req, res) => {
-    const newUser = new User({
-        email: req.body.username,
-        password: md5(req.body.password)
+    bcrypt.hash(req.body.password, saltRounds).then(function(hash) {
+        // Store hash in your password DB.
+        const newUser = new User({
+            email: req.body.username,
+            password: hash
+        });
+        newUser.save((err) => {
+            console.log('Successfully registered');
+            res.render('secrets');
+        });
     });
-    newUser.save((err) => {
-        console.log('Successfully registered');
-        res.render('secrets');
-    });
+    
 });
 
 app.post('/login', (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
-    
+
     User.findOne({email: username}, (err, foundUser) => {
         if(err) {
             console.log(err);
             res.redirect('/');
         } else {
             if(foundUser) {
-                if(foundUser.password === md5(password)) {
-                    console.log('Successfully logged in: ' + username);
-                    res.render('secrets');
-                } else {
-                    console.log('Incorrect login details');
-                    res.render('login');
-                }
+                bcrypt.compare(password, foundUser.password).then(function(result) {
+                    if(result === true) {
+                        console.log('Successfully logged in: ' + username);
+                        res.render('secrets');
+                    } else {
+                        console.log('Incorrect login details');
+                        res.render('login');
+                    }
+                });
+                
             } else {
                 console.log('No user found');
                 res.redirect('/');
